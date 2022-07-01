@@ -110,6 +110,7 @@ data
 .idea
 .DS_Store
 
+checkpoints/
 # custom
 *.pkl
 *.pkl.json
