@@ -70,7 +70,8 @@ model = dict(
                     clip_border=False,
                     target_means=[0., 0., 0., 0.],
                     target_stds=[0.5, 0.5, 1., 1.])) for _ in range(num_stages)
-        ]),
+        ]
+    ),
     # training and testing settings
     train_cfg=dict(
         rpn=None,
@@ -85,7 +86,8 @@ model = dict(
                 sampler=dict(type='PseudoSampler'),
                 pos_weight=1) for _ in range(num_stages)
         ]),
-    test_cfg=dict(rpn=None, rcnn=dict(max_per_img=num_proposals)))
+    test_cfg=dict(rpn=None, rcnn=dict(max_per_img=num_proposals))
+)
 
 # optimizer
 optimizer = dict(_delete_=True, type='AdamW', lr=0.000025, weight_decay=0.0001)

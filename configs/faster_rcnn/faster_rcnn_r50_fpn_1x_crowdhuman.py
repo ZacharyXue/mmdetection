@@ -14,4 +14,5 @@ model = dict(
 
 runner = dict(type='EpochBasedRunner', max_epochs=18)
 
-load_from = 'https://download.openmmlab.com/mmdetection/v2.0/faster_rcnn/faster_rcnn_r50_fpn_2x_coco/faster_rcnn_r50_fpn_2x_coco_bbox_mAP-0.384_20200504_210434-a5d8aa15.pth'
+# load_from = 'https://download.openmmlab.com/mmdetection/v2.0/faster_rcnn/faster_rcnn_r50_fpn_2x_coco/faster_rcnn_r50_fpn_2x_coco_bbox_mAP-0.384_20200504_210434-a5d8aa15.pth'
+load_from = './checkpoints/faster_rcnn_r50_fpn_1x/epoch_15.pth'
