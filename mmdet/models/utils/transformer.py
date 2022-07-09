@@ -1136,6 +1136,7 @@ class DynamicConv(BaseModule):
             Tensor: The output feature has shape
             (num_all_proposals, out_channels).
         """
+        # TODO
         input_feature = input_feature.flatten(2).permute(2, 0, 1)
 
         input_feature = input_feature.permute(1, 0, 2)

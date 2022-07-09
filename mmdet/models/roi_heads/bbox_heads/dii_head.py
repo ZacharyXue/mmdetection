@@ -171,6 +171,8 @@ class DIIHead(BBoxHead):
         attn_feats = proposal_feat.permute(1, 0, 2)
 
         # instance interactive
+        # reshape 之后的操作就是针对每一个 bbox 内的特征以及相应的
+        #  proposal features 进行的
         proposal_feat = attn_feats.reshape(-1, self.in_channels)
         proposal_feat_iic = self.instance_interactive_conv(
             proposal_feat, roi_feat)

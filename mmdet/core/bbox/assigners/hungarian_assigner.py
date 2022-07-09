@@ -51,10 +51,10 @@ class HungarianAssigner(BaseAssigner):
         self.iou_cost = build_match_cost(iou_cost)
 
     def assign(self,
-               bbox_pred,
-               cls_pred,
+               bbox_pred,             
                gt_bboxes,
                gt_labels,
+               cls_pred,
                img_meta,
                gt_bboxes_ignore=None,
                eps=1e-7):

@@ -58,7 +58,8 @@ model = dict(
                     act_cfg=dict(type='ReLU', inplace=True),
                     norm_cfg=dict(type='LN')),
                 loss_bbox=dict(type='L1Loss', loss_weight=5.0),
-                loss_iou=dict(type='GIoULoss', loss_weight=2.0),
+                # loss_iou=dict(type='GIoULoss', loss_weight=2.0),
+                loss_iou=dict(type='CIoULoss', loss_weight=2.0),
                 loss_cls=dict(
                     type='FocalLoss',
                     use_sigmoid=True,
@@ -76,6 +77,37 @@ model = dict(
     train_cfg=dict(
         rpn=None,
         rcnn=[
+            # ============= 修改训练流程 =================
+            dict(
+                assigner=dict(
+                    type='MaxIoUAssigner',
+                    pos_iou_thr=0.5,
+                    neg_iou_thr=0.5,
+                    min_pos_iou=0.5,
+                    match_low_quality=False,
+                    ignore_iof_thr=-1),
+                sampler=dict(type='PseudoSampler'),
+                pos_weight=-1),
+            dict(
+                assigner=dict(
+                    type='MaxIoUAssigner',
+                    pos_iou_thr=0.6,
+                    neg_iou_thr=0.6,
+                    min_pos_iou=0.6,
+                    match_low_quality=False,
+                    ignore_iof_thr=-1),
+                sampler=dict(type='PseudoSampler'),
+                pos_weight=-1),
+            dict(
+                assigner=dict(
+                    type='MaxIoUAssigner',
+                    pos_iou_thr=0.7,
+                    neg_iou_thr=0.7,
+                    min_pos_iou=0.7,
+                    match_low_quality=False,
+                    ignore_iof_thr=-1),
+                sampler=dict(type='PseudoSampler'),
+                pos_weight=-1),
             dict(
                 assigner=dict(
                     type='HungarianAssigner',
@@ -84,7 +116,35 @@ model = dict(
                     iou_cost=dict(type='IoUCost', iou_mode='giou',
                                   weight=2.0)),
                 sampler=dict(type='PseudoSampler'),
-                pos_weight=1) for _ in range(num_stages)
+                pos_weight=1),
+            dict(
+                assigner=dict(
+                    type='HungarianAssigner',
+                    cls_cost=dict(type='FocalLossCost', weight=2.0),
+                    reg_cost=dict(type='BBoxL1Cost', weight=5.0),
+                    iou_cost=dict(type='IoUCost', iou_mode='giou',
+                                  weight=2.0)),
+                sampler=dict(type='PseudoSampler'),
+                pos_weight=1),
+            dict(
+                assigner=dict(
+                    type='HungarianAssigner',
+                    cls_cost=dict(type='FocalLossCost', weight=2.0),
+                    reg_cost=dict(type='BBoxL1Cost', weight=5.0),
+                    iou_cost=dict(type='IoUCost', iou_mode='giou',
+                                  weight=2.0)),
+                sampler=dict(type='PseudoSampler'),
+                pos_weight=1)
+            # ===============================================
+            # dict(
+            #     assigner=dict(
+            #         type='HungarianAssigner',
+            #         cls_cost=dict(type='FocalLossCost', weight=2.0),
+            #         reg_cost=dict(type='BBoxL1Cost', weight=5.0),
+            #         iou_cost=dict(type='IoUCost', iou_mode='giou',
+            #                       weight=2.0)),
+            #     sampler=dict(type='PseudoSampler'),
+            #     pos_weight=1) for _ in range(num_stages)
         ]),
     test_cfg=dict(rpn=None, rcnn=dict(max_per_img=num_proposals))
 )
@@ -96,4 +156,4 @@ optimizer_config = dict(_delete_=True, grad_clip=dict(max_norm=1, norm_type=2))
 lr_config = dict(policy='step', step=[12,17])
 runner = dict(type='EpochBasedRunner', max_epochs=18)
 
-load_from = 'https://download.openmmlab.com/mmdetection/v2.0/sparse_rcnn/sparse_rcnn_r50_fpn_1x_coco/sparse_rcnn_r50_fpn_1x_coco_20201222_214453-dc79b137.pth'
+# load_from = 'https://download.openmmlab.com/mmdetection/v2.0/sparse_rcnn/sparse_rcnn_r50_fpn_1x_coco/sparse_rcnn_r50_fpn_1x_coco_20201222_214453-dc79b137.pth'

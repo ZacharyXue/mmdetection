@@ -243,8 +243,8 @@ class SparseRoIHead(CascadeRoIHead):
                 normalize_bbox_ccwh = bbox_xyxy_to_cxcywh(proposal_list[i] /
                                                           imgs_whwh[i])
                 assign_result = self.bbox_assigner[stage].assign(
-                    normalize_bbox_ccwh, cls_pred_list[i], gt_bboxes[i],
-                    gt_labels[i], img_metas[i])
+                    normalize_bbox_ccwh, gt_bboxes[i], gt_labels[i],
+                     cls_pred=cls_pred_list[i],img_meta=img_metas[i])
                 sampling_result = self.bbox_sampler[stage].sample(
                     assign_result, proposal_list[i], gt_bboxes[i])
                 sampling_results.append(sampling_result)
