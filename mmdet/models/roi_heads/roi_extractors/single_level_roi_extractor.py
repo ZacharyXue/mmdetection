@@ -56,10 +56,21 @@ class SingleRoIExtractor(BaseRoIExtractor):
 
     @force_fp32(apply_to=('feats', ), out_fp16=True)
     def forward(self, feats, rois, roi_scale_factor=None):
-        """Forward function."""
+        """Forward function.
+        Args:
+            rois: shape=(num_proposal, 5), the last dimension 5 represents (img_index, x1, y1, x2, y2).
+        Returns:
+            roi_feats: with shape (batch_size * num_proposals, out_channels, out_size_height, out_size_width)
+        """
         out_size = self.roi_layers[0].output_size
+        # if the `roi_layer` is `RoIAlign`, the raw code is as follows : 
+        # https://github.com/open-mmlab/mmcv/blob/f4167fe1e3d106cd641708d269ddbff568393437/mmcv/ops/roi_align.py#L136
+        #   output_size (tuple): h, w
+        #   in the cfg 'configs/sparse_rcnn/sparse_rcnn_r50_fpn_1x_crowdhuman.py', the output_size is 7 x 7
         num_levels = len(feats)
         expand_dims = (-1, self.out_channels * out_size[0] * out_size[1])
+        #   'self.out_channels' is from the paramter 'out_channels' of the 'bbox_roi_extractor' in configs 
+        #   now it is setted as 256
         if torch.onnx.is_in_onnx_export():
             # Work around to export mask-rcnn to onnx
             roi_feats = rois[:, :1].clone().detach()

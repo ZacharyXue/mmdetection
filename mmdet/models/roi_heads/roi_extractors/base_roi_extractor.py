@@ -50,7 +50,10 @@ class BaseRoIExtractor(BaseModule, metaclass=ABCMeta):
             nn.ModuleList: The RoI extractor modules for each level feature
                 map.
         """
-
+        
+        # RoIAlign 
+        #   raw code: 
+        # https://github.com/open-mmlab/mmcv/blob/f4167fe1e3d106cd641708d269ddbff568393437/mmcv/ops/roi_align.py#L136
         cfg = layer_cfg.copy()
         layer_type = cfg.pop('type')
         assert hasattr(ops, layer_type)

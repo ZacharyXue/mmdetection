@@ -1,6 +1,7 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import numpy as np
 import torch
+import torch.nn as nn
 
 from mmdet.core import bbox2result, bbox2roi, bbox_xyxy_to_cxcywh
 from mmdet.core.bbox.samplers import PseudoSampler
@@ -85,6 +86,13 @@ class SparseRoIHead(CascadeRoIHead):
                 assert isinstance(self.bbox_sampler[stage], PseudoSampler), \
                     'Sparse R-CNN and QueryInst only support `PseudoSampler`'
 
+        self.proposal_conv = nn.Sequential(
+            nn.Conv2d(bbox_roi_extractor['out_channels'], bbox_roi_extractor['out_channels'], 3, padding=1),
+            nn.ReLU(),
+            nn.Flatten(start_dim=2),
+            nn.Linear(bbox_roi_extractor['roi_layer']['output_size'] ** 2 , 1)
+        )
+
     def _bbox_forward(self, stage, x, rois, object_feats, img_metas):
         """Box head forward function used in both training and testing. Returns
         all regression, classification results and a intermediate feature.
@@ -127,6 +135,9 @@ class SparseRoIHead(CascadeRoIHead):
         bbox_head = self.bbox_head[stage]
         bbox_feats = bbox_roi_extractor(x[:bbox_roi_extractor.num_inputs],
                                         rois)
+        # bbox_feats.shape = (batch_size, out_channels, out_size_height, out_size_width)
+        #       if in default, the shape is (batch_size, 256, 7, 7)
+        # bbox_roi_extractor.num_inputs = len(self.featmap_strides)
         cls_score, bbox_pred, object_feats, attn_feats = bbox_head(
             bbox_feats, object_feats)
         proposal_list = self.bbox_head[stage].refine_bboxes(
@@ -181,6 +192,22 @@ class SparseRoIHead(CascadeRoIHead):
         mask_results.update(loss_mask)
         return mask_results
 
+    def dynamic_proposal_features(self,
+                                  x,
+                                #   proposal_boxes,
+                                  proposal_list,
+                                  proposal_features):
+
+        # proposal_list = [proposal_boxes[i] for i in range(len(proposal_boxes))]
+        rois = bbox2roi(proposal_list)
+        bbox_roi_extractor = self.bbox_roi_extractor[0]
+        bbox_feats = bbox_roi_extractor(x[:bbox_roi_extractor.num_inputs],
+                                        rois)
+        bbox_feats = self.proposal_conv(bbox_feats)
+        bbox_feats = torch.reshape(bbox_feats, proposal_features.shape)
+
+        return  bbox_feats
+
     def forward_train(self,
                       x,
                       proposal_boxes,
@@ -226,7 +253,17 @@ class SparseRoIHead(CascadeRoIHead):
         imgs_whwh = imgs_whwh.repeat(1, num_proposals, 1)
         all_stage_bbox_results = []
         proposal_list = [proposal_boxes[i] for i in range(len(proposal_boxes))]
-        object_feats = proposal_features
+        
+        # object_feats = proposal_features
+        # # TODO 增加 proposal_features 和图像的关系
+        # bbox_roi_extractor = self.bbox_roi_extractor[0]
+        # bbox_feats = bbox_roi_extractor(x[:bbox_roi_extractor.num_inputs],
+        #                                 rois)
+        # bbox_feats = self.proposal_conv(bbox_feats)
+        # bbox_feats = torch.reshape(bbox_feats, proposal_features.shape)
+        # object_feats = bbox_feats
+        object_feats = self.dynamic_proposal_features(x, proposal_list, proposal_features)
+        
         all_stage_loss = {}
         for stage in range(self.num_stages):
             rois = bbox2roi(proposal_list)
@@ -313,7 +350,8 @@ class SparseRoIHead(CascadeRoIHead):
         ori_shapes = tuple(meta['ori_shape'] for meta in img_metas)
         scale_factors = tuple(meta['scale_factor'] for meta in img_metas)
 
-        object_feats = proposal_features
+        # object_feats = proposal_features
+        object_feats = self.dynamic_proposal_features(x, proposal_list, proposal_features)
         if all([proposal.shape[0] == 0 for proposal in proposal_list]):
             # There is no proposal in the whole batch
             bbox_results = [[
@@ -405,7 +443,8 @@ class SparseRoIHead(CascadeRoIHead):
         """Dummy forward function when do the flops computing."""
         all_stage_bbox_results = []
         proposal_list = [proposal_boxes[i] for i in range(len(proposal_boxes))]
-        object_feats = proposal_features
+        # object_feats = proposal_features
+        object_feats = self.dynamic_proposal_features(x, proposal_list, proposal_features)
         if self.with_bbox:
             for stage in range(self.num_stages):
                 rois = bbox2roi(proposal_list)
