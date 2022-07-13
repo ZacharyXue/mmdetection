@@ -1,7 +1,5 @@
 _base_ = './sparse_rcnn_r50_fpn_300_proposals_crop_mstrain_480-800_1x_crowdhuman.py'
 
-num_stages = 6
-
 model = dict(
     backbone=dict(
         dcn=dict(type='DCN', deform_groups=1, fallback_on_stride=False),
@@ -16,6 +14,8 @@ model = dict(
     )
 )
 
-runner = dict(type='EpochBasedRunner', max_epochs=12)
+runner = dict(type='EpochBasedRunner', max_epochs=36)
 
-# load_from = './checkpoints/sparse_rcnn_r50_dcn_pan_1x_300p/epoch_13.pth'
+checkpoint_config = dict(interval=3)
+
+load_from = './checkpoints/sparse_rcnn_r50_dcn_pan_1x_300p_3stages/epoch_36.pth'

@@ -2,7 +2,8 @@ _base_ = [
     '../_base_/datasets/coco_detection.py',
     '../_base_/schedules/schedule_1x.py', '../_base_/default_runtime.py'
 ]
-num_stages = 6
+# num_stages = 6
+num_stages = 3
 num_proposals = 100
 model = dict(
     type='SparseRCNN',
@@ -77,37 +78,6 @@ model = dict(
     train_cfg=dict(
         rpn=None,
         rcnn=[
-            # ============= 修改训练流程 =================
-            dict(
-                assigner=dict(
-                    type='MaxIoUAssigner',
-                    pos_iou_thr=0.5,
-                    neg_iou_thr=0.5,
-                    min_pos_iou=0.5,
-                    match_low_quality=False,
-                    ignore_iof_thr=-1),
-                sampler=dict(type='PseudoSampler'),
-                pos_weight=-1),
-            dict(
-                assigner=dict(
-                    type='MaxIoUAssigner',
-                    pos_iou_thr=0.6,
-                    neg_iou_thr=0.6,
-                    min_pos_iou=0.6,
-                    match_low_quality=False,
-                    ignore_iof_thr=-1),
-                sampler=dict(type='PseudoSampler'),
-                pos_weight=-1),
-            dict(
-                assigner=dict(
-                    type='MaxIoUAssigner',
-                    pos_iou_thr=0.7,
-                    neg_iou_thr=0.7,
-                    min_pos_iou=0.7,
-                    match_low_quality=False,
-                    ignore_iof_thr=-1),
-                sampler=dict(type='PseudoSampler'),
-                pos_weight=-1),
             dict(
                 assigner=dict(
                     type='HungarianAssigner',
@@ -116,35 +86,7 @@ model = dict(
                     iou_cost=dict(type='IoUCost', iou_mode='giou',
                                   weight=2.0)),
                 sampler=dict(type='PseudoSampler'),
-                pos_weight=1),
-            dict(
-                assigner=dict(
-                    type='HungarianAssigner',
-                    cls_cost=dict(type='FocalLossCost', weight=2.0),
-                    reg_cost=dict(type='BBoxL1Cost', weight=5.0),
-                    iou_cost=dict(type='IoUCost', iou_mode='giou',
-                                  weight=2.0)),
-                sampler=dict(type='PseudoSampler'),
-                pos_weight=1),
-            dict(
-                assigner=dict(
-                    type='HungarianAssigner',
-                    cls_cost=dict(type='FocalLossCost', weight=2.0),
-                    reg_cost=dict(type='BBoxL1Cost', weight=5.0),
-                    iou_cost=dict(type='IoUCost', iou_mode='giou',
-                                  weight=2.0)),
-                sampler=dict(type='PseudoSampler'),
-                pos_weight=1)
-            # ===============================================
-            # dict(
-            #     assigner=dict(
-            #         type='HungarianAssigner',
-            #         cls_cost=dict(type='FocalLossCost', weight=2.0),
-            #         reg_cost=dict(type='BBoxL1Cost', weight=5.0),
-            #         iou_cost=dict(type='IoUCost', iou_mode='giou',
-            #                       weight=2.0)),
-            #     sampler=dict(type='PseudoSampler'),
-            #     pos_weight=1) for _ in range(num_stages)
+                pos_weight=1) for _ in range(num_stages)
         ]),
     test_cfg=dict(rpn=None, rcnn=dict(max_per_img=num_proposals))
 )
