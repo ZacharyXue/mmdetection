@@ -2,8 +2,8 @@ _base_ = [
     '../_base_/datasets/coco_detection.py',
     '../_base_/schedules/schedule_1x.py', '../_base_/default_runtime.py'
 ]
-# num_stages = 6
-num_stages = 3
+num_stages = 6
+# num_stages = 3
 num_proposals = 100
 model = dict(
     type='SparseRCNN',

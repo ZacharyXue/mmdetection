@@ -262,6 +262,11 @@ class SparseRoIHead(CascadeRoIHead):
         # bbox_feats = self.proposal_conv(bbox_feats)
         # bbox_feats = torch.reshape(bbox_feats, proposal_features.shape)
         # object_feats = bbox_feats
+        
+        # object_feats = self.dynamic_proposal_features(x, proposal_list, proposal_features)
+        # TODO
+        # 现在效果不好，会不会是 dynamic_proposal_features 开始时候初始化为 0 效果会好很多
+        # 或者是不是加深网络层？ 
         object_feats = proposal_features + self.dynamic_proposal_features(x, proposal_list, proposal_features)
         
         all_stage_loss = {}
@@ -351,6 +356,7 @@ class SparseRoIHead(CascadeRoIHead):
         scale_factors = tuple(meta['scale_factor'] for meta in img_metas)
 
         # object_feats = proposal_features
+        # object_feats = self.dynamic_proposal_features(x, proposal_list, proposal_features)
         object_feats = proposal_features + self.dynamic_proposal_features(x, proposal_list, proposal_features)
         if all([proposal.shape[0] == 0 for proposal in proposal_list]):
             # There is no proposal in the whole batch
@@ -444,6 +450,7 @@ class SparseRoIHead(CascadeRoIHead):
         all_stage_bbox_results = []
         proposal_list = [proposal_boxes[i] for i in range(len(proposal_boxes))]
         # object_feats = proposal_features
+        # object_feats = self.dynamic_proposal_features(x, proposal_list, proposal_features)
         object_feats = proposal_features + self.dynamic_proposal_features(x, proposal_list, proposal_features)
         if self.with_bbox:
             for stage in range(self.num_stages):
