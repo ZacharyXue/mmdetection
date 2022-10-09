@@ -1,0 +1,8 @@
+0: USBFlashDisk
+1: scissors
+2: knife
+3: plasticBottleWithaNozzle
+4: seal
+5: lighter
+6: pressure
+7: battery
