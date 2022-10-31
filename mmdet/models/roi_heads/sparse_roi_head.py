@@ -86,11 +86,15 @@ class SparseRoIHead(CascadeRoIHead):
                 assert isinstance(self.bbox_sampler[stage], PseudoSampler), \
                     'Sparse R-CNN and QueryInst only support `PseudoSampler`'
 
+        # TODO: dynamic proposal 提取网络设计
         self.proposal_conv = nn.Sequential(
             nn.Conv2d(bbox_roi_extractor['out_channels'], bbox_roi_extractor['out_channels'], 3, padding=1),
             nn.ReLU(),
+            nn.Conv2d(bbox_roi_extractor['out_channels'], bbox_roi_extractor['out_channels'], 3, padding=1),
+            nn.ReLU(),
             nn.Flatten(start_dim=2),
-            nn.Linear(bbox_roi_extractor['roi_layer']['output_size'] ** 2 , 1)
+            nn.Linear(bbox_roi_extractor['roi_layer']['output_size'] ** 2 , bbox_roi_extractor['roi_layer']['output_size']),
+            nn.Linear(bbox_roi_extractor['roi_layer']['output_size'] , 1)
         )
 
     def _bbox_forward(self, stage, x, rois, object_feats, img_metas):
@@ -139,7 +143,7 @@ class SparseRoIHead(CascadeRoIHead):
         #       if in default, the shape is (batch_size, 256, 7, 7)
         # bbox_roi_extractor.num_inputs = len(self.featmap_strides)
         cls_score, bbox_pred, object_feats, attn_feats = bbox_head(
-            bbox_feats, object_feats)
+            rois, bbox_feats, object_feats)
         proposal_list = self.bbox_head[stage].refine_bboxes(
             rois,
             rois.new_zeros(len(rois)),  # dummy arg
@@ -203,6 +207,7 @@ class SparseRoIHead(CascadeRoIHead):
         bbox_roi_extractor = self.bbox_roi_extractor[0]
         bbox_feats = bbox_roi_extractor(x[:bbox_roi_extractor.num_inputs],
                                         rois)
+        # (batch_size * num_proposals, out_channels, out_size_height, out_size_width)
         bbox_feats = self.proposal_conv(bbox_feats)
         bbox_feats = torch.reshape(bbox_feats, proposal_features.shape)
 
@@ -255,19 +260,8 @@ class SparseRoIHead(CascadeRoIHead):
         proposal_list = [proposal_boxes[i] for i in range(len(proposal_boxes))]
         
         # object_feats = proposal_features
-        # # TODO 增加 proposal_features 和图像的关系
-        # bbox_roi_extractor = self.bbox_roi_extractor[0]
-        # bbox_feats = bbox_roi_extractor(x[:bbox_roi_extractor.num_inputs],
-        #                                 rois)
-        # bbox_feats = self.proposal_conv(bbox_feats)
-        # bbox_feats = torch.reshape(bbox_feats, proposal_features.shape)
-        # object_feats = bbox_feats
-        
-        # object_feats = self.dynamic_proposal_features(x, proposal_list, proposal_features)
-        # TODO
-        # 现在效果不好，会不会是 dynamic_proposal_features 开始时候初始化为 0 效果会好很多
-        # 或者是不是加深网络层？ 
-        object_feats = proposal_features + self.dynamic_proposal_features(x, proposal_list, proposal_features)
+        object_feats = self.dynamic_proposal_features(x, proposal_list, proposal_features)
+        # object_feats = proposal_features + self.dynamic_proposal_features(x, proposal_list, proposal_features)
         
         all_stage_loss = {}
         for stage in range(self.num_stages):
@@ -356,8 +350,8 @@ class SparseRoIHead(CascadeRoIHead):
         scale_factors = tuple(meta['scale_factor'] for meta in img_metas)
 
         # object_feats = proposal_features
-        # object_feats = self.dynamic_proposal_features(x, proposal_list, proposal_features)
-        object_feats = proposal_features + self.dynamic_proposal_features(x, proposal_list, proposal_features)
+        object_feats = self.dynamic_proposal_features(x, proposal_list, proposal_features)
+        # object_feats = proposal_features + self.dynamic_proposal_features(x, proposal_list, proposal_features)
         if all([proposal.shape[0] == 0 for proposal in proposal_list]):
             # There is no proposal in the whole batch
             bbox_results = [[
@@ -450,8 +444,8 @@ class SparseRoIHead(CascadeRoIHead):
         all_stage_bbox_results = []
         proposal_list = [proposal_boxes[i] for i in range(len(proposal_boxes))]
         # object_feats = proposal_features
-        # object_feats = self.dynamic_proposal_features(x, proposal_list, proposal_features)
-        object_feats = proposal_features + self.dynamic_proposal_features(x, proposal_list, proposal_features)
+        object_feats = self.dynamic_proposal_features(x, proposal_list, proposal_features)
+        # object_feats = proposal_features + self.dynamic_proposal_features(x, proposal_list, proposal_features)
         if self.with_bbox:
             for stage in range(self.num_stages):
                 rois = bbox2roi(proposal_list)

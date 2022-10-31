@@ -76,7 +76,15 @@ class DIIHead(BBoxHead):
         self.in_channels = in_channels
         self.fp16_enabled = False
         self.attention = MultiheadAttention(in_channels, num_heads, dropout)
+        
+        # TODO 将 proposal feat 压缩四个维度给 bboxes
+        self.proposal_feat_linear = nn.Linear(in_channels, in_channels - 4)
+
+        # # TODO 给 bboxes 加注意力机制
+        # self.pred_attention = MultiheadAttention( 4, 1, dropout)
+        # #   embed_dims = 4, return [num_queries, bs, embed_dims]
         self.attention_norm = build_norm_layer(dict(type='LN'), in_channels)[1]
+        # self.pred_attention_norm = build_norm_layer(dict(type='LN'), 4)[1]
 
         self.instance_interactive_conv = build_transformer(dynamic_conv_cfg)
         self.instance_interactive_conv_dropout = nn.Dropout(dropout)
@@ -138,10 +146,12 @@ class DIIHead(BBoxHead):
             nn.init.constant_(self.fc_cls.bias, bias_init)
 
     @auto_fp16()
-    def forward(self, roi_feat, proposal_feat):
+    def forward(self, rois, roi_feat, proposal_feat):
         """Forward function of Dynamic Instance Interactive Head.
 
         Args:
+            rois (Tensor): Rois in total batch. With shape (batch_size*num_proposals, 5).
+                the last dimension 5 represents (img_index, x1, y1, x2, y2).
             roi_feat (Tensor): Roi-pooling features with shape
                 (batch_size*num_proposals, feature_dimensions,
                 pooling_h , pooling_w).
@@ -163,9 +173,25 @@ class DIIHead(BBoxHead):
                       and regression subnet, has shape
                       (batch_size, num_proposal, feature_dimensions).
         """
+        pos_bboxes = rois[:, 1:]  # shape = [batch_size*num_proposals, 4], shape[1] = [x1, y1, x2, y2]
+
         N, num_proposals = proposal_feat.shape[:2]
 
-        # Self attention
+        # # TODO bboxes prediction 的注意力机制
+        # # Self attention of bboxes prediction
+        # pos_bboxes = pos_bboxes.reshape((N, num_proposals, 4))  # [bs, num_queries, embed_dims]
+        # pos_bboxes = pos_bboxes.permute(1, 0, 2)
+        # # ? 没有加正则化
+        # # pos_bboxes = self.pred_attention(pos_bboxes)
+        # pos_bboxes = self.pred_attention_norm(self.pred_attention(pos_bboxes))
+        # attn_bbox = pos_bboxes.permute(1, 0, 2)
+
+        # TODO 将 bboxes 信息直接附在 proposal feat 上
+        proposal_feat = self.proposal_feat_linear(proposal_feat)  # (batch_size, num_proposals, feature_dimensions - 4)
+        pos_bboxes = pos_bboxes.reshape((N, num_proposals, 4))  # [bs, num_proposals, 4]
+        proposal_feat = torch.concat([proposal_feat, pos_bboxes], -1)
+
+        # Self attention of object queries
         proposal_feat = proposal_feat.permute(1, 0, 2)
         proposal_feat = self.attention_norm(self.attention(proposal_feat))
         attn_feats = proposal_feat.permute(1, 0, 2)
@@ -194,6 +220,9 @@ class DIIHead(BBoxHead):
         cls_score = self.fc_cls(cls_feat).view(
             N, num_proposals, self.num_classes
             if self.loss_cls.use_sigmoid else self.num_classes + 1)
+        # # TODO 添加 bboxes 位置感知
+        # # 得到bbox的坐标  self.fc_reg --> FCN
+        # bbox_delta = self.fc_reg(reg_feat).view(N, num_proposals, 4) + attn_bbox
         bbox_delta = self.fc_reg(reg_feat).view(N, num_proposals, 4)
 
         return cls_score, bbox_delta, obj_feat.view(

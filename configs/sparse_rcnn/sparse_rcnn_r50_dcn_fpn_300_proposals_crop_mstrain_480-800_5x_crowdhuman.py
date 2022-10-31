@@ -16,7 +16,8 @@ model = dict(
 
 runner = dict(type='EpochBasedRunner', max_epochs=50)
 # runner = dict(type='EpochBasedRunner', max_epochs=36)
+lr_config = dict(policy='step', step=[27, 36])
 
-checkpoint_config = dict(interval=5)
+checkpoint_config = dict(interval=10)
 
 # load_from = './checkpoints/sparse_rcnn_r50_dcn_pan_1x_300p/epoch_12.pth'
