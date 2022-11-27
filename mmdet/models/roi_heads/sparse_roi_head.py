@@ -139,11 +139,14 @@ class SparseRoIHead(CascadeRoIHead):
         bbox_head = self.bbox_head[stage]
         bbox_feats = bbox_roi_extractor(x[:bbox_roi_extractor.num_inputs],
                                         rois)
+        # bbox_feats.shape = (batch_size * num_proposals, out_channels, out_size_height, out_size_width)
+        # TODO: 是不是可以加一个 channel atten 来增强多尺度下目标的选择
+
         # bbox_feats.shape = (batch_size, out_channels, out_size_height, out_size_width)
         #       if in default, the shape is (batch_size, 256, 7, 7)
         # bbox_roi_extractor.num_inputs = len(self.featmap_strides)
         cls_score, bbox_pred, object_feats, attn_feats = bbox_head(
-            rois, bbox_feats, object_feats)
+            rois, bbox_feats, object_feats, stage)
         proposal_list = self.bbox_head[stage].refine_bboxes(
             rois,
             rois.new_zeros(len(rois)),  # dummy arg

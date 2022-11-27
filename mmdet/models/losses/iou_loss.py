@@ -174,7 +174,7 @@ def diou_loss(pred, target, eps=1e-7):
 
 @mmcv.jit(derivate=True, coderize=True)
 @weighted_loss
-def ciou_loss(pred, target, eps=1e-7):
+def ciou_loss(pred, target, beta_center=1,beta_aspect=1,eps=1e-7):
     r"""`Implementation of paper `Enhancing Geometric Factors into
     Model Learning and Inference for Object Detection and Instance
     Segmentation <https://arxiv.org/abs/2005.03572>`_.
@@ -223,16 +223,22 @@ def ciou_loss(pred, target, eps=1e-7):
 
     left = ((b2_x1 + b2_x2) - (b1_x1 + b1_x2))**2 / 4
     right = ((b2_y1 + b2_y2) - (b1_y1 + b1_y2))**2 / 4
-    rho2 = left + right
+    rho2 = (left + right) / c2
 
-    factor = 4 / math.pi**2
-    v = factor * torch.pow(torch.atan(w2 / h2) - torch.atan(w1 / h1), 2)
+    # factor = 4 / math.pi**2
+    # v = factor * torch.pow(torch.atan(w2 / h2) - torch.atan(w1 / h1), 2)
 
-    with torch.no_grad():
-        alpha = (ious > 0.5).float() * v / (1 - ious + v)
+    # with torch.no_grad():
+    #     alpha = (ious > 0.5).float() * v / (1 - ious + v)
 
-    # CIoU
-    cious = ious - (rho2 / c2 + alpha * v)
+    # TODO: 将 CIoU 改为 EIoU
+    rho_w = (w1 - w2)**2 / cw**2
+    rho_h = (h1 - h2)**2 / ch**2
+
+    # # CIoU
+    # # * rho2 / c2 是 EIoU Loss 中的 L_dis， bbox 中心的损失
+    # cious = ious - (rho2 / c2 + alpha * v) 
+    cious = ious - ( beta_center * rho2 + beta_aspect * (rho_w + rho_h))
     loss = 1 - cious.clamp(min=-1.0, max=1.0)
     return loss
 
@@ -437,11 +443,14 @@ class DIoULoss(nn.Module):
 @LOSSES.register_module()
 class CIoULoss(nn.Module):
 
-    def __init__(self, eps=1e-6, reduction='mean', loss_weight=1.0):
+    def __init__(self, eps=1e-6, reduction='mean', loss_weight=1.0, beta_center=1, beta_aspect=1):
         super(CIoULoss, self).__init__()
         self.eps = eps
         self.reduction = reduction
         self.loss_weight = loss_weight
+
+        self.beta_center = beta_center
+        self.beta_aspect = beta_aspect
 
     def forward(self,
                 pred,
@@ -467,6 +476,8 @@ class CIoULoss(nn.Module):
             pred,
             target,
             weight,
+            beta_center=self.beta_center,
+            beta_aspect=self.beta_aspect,
             eps=self.eps,
             reduction=reduction,
             avg_factor=avg_factor,

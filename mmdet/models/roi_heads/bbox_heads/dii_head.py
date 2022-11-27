@@ -77,8 +77,12 @@ class DIIHead(BBoxHead):
         self.fp16_enabled = False
         self.attention = MultiheadAttention(in_channels, num_heads, dropout)
         
-        # TODO 将 proposal feat 压缩四个维度给 bboxes
-        self.proposal_feat_linear = nn.Linear(in_channels, in_channels - 4)
+        # # TODO 将 proposal feat 压缩四个维度给 bboxes
+        # self.proposal_feat_maps = nn.Sequential(
+        #     nn.Linear(in_channels + 4 , in_channels + 2),
+        #     nn.ReLU(),
+        #     nn.Linear(in_channels + 2 , in_channels)
+        # )
 
         # # TODO 给 bboxes 加注意力机制
         # self.pred_attention = MultiheadAttention( 4, 1, dropout)
@@ -146,7 +150,7 @@ class DIIHead(BBoxHead):
             nn.init.constant_(self.fc_cls.bias, bias_init)
 
     @auto_fp16()
-    def forward(self, rois, roi_feat, proposal_feat):
+    def forward(self, rois, roi_feat, proposal_feat, stage=1):
         """Forward function of Dynamic Instance Interactive Head.
 
         Args:
@@ -173,9 +177,11 @@ class DIIHead(BBoxHead):
                       and regression subnet, has shape
                       (batch_size, num_proposal, feature_dimensions).
         """
-        pos_bboxes = rois[:, 1:]  # shape = [batch_size*num_proposals, 4], shape[1] = [x1, y1, x2, y2]
+        # pos_bboxes = rois[:, 1:]  # shape = [batch_size*num_proposals, 4], shape[1] = [x1, y1, x2, y2]
 
         N, num_proposals = proposal_feat.shape[:2]
+
+        # pos_bboxes = pos_bboxes.reshape((N, num_proposals, 4))  # [bs, num_proposals, 4]
 
         # # TODO bboxes prediction 的注意力机制
         # # Self attention of bboxes prediction
@@ -186,10 +192,11 @@ class DIIHead(BBoxHead):
         # pos_bboxes = self.pred_attention_norm(self.pred_attention(pos_bboxes))
         # attn_bbox = pos_bboxes.permute(1, 0, 2)
 
-        # TODO 将 bboxes 信息直接附在 proposal feat 上
-        proposal_feat = self.proposal_feat_linear(proposal_feat)  # (batch_size, num_proposals, feature_dimensions - 4)
-        pos_bboxes = pos_bboxes.reshape((N, num_proposals, 4))  # [bs, num_proposals, 4]
-        proposal_feat = torch.concat([proposal_feat, pos_bboxes], -1)
+        # # TODO 将 bboxes 信息直接附在 proposal feat 上
+        # if not stage:
+        #     pos_bboxes = pos_bboxes.reshape((N, num_proposals, 4)).detach()  # [bs, num_proposals, 4]
+        #     proposal_feat = torch.concat([proposal_feat, pos_bboxes], -1)
+        #     proposal_feat = self.proposal_feat_maps(proposal_feat)  # (batch_size, num_proposals, feature_dimensions - 4)
 
         # Self attention of object queries
         proposal_feat = proposal_feat.permute(1, 0, 2)
@@ -200,10 +207,16 @@ class DIIHead(BBoxHead):
         # reshape 之后的操作就是针对每一个 bbox 内的特征以及相应的
         #  proposal features 进行的
         proposal_feat = attn_feats.reshape(-1, self.in_channels)
+
         proposal_feat_iic = self.instance_interactive_conv(
             proposal_feat, roi_feat)
-        proposal_feat = proposal_feat + self.instance_interactive_conv_dropout(
-            proposal_feat_iic)
+        # # TODO: 阻断梯度
+        # proposal_feat_iic = self.instance_interactive_conv(
+        #     proposal_feat.detach(), roi_feat)
+
+        # ! 这里之前没有注意，其实有加上一阶段的状态，只不过没有直接加 bboxes 坐标而已
+        proposal_feat_iic = self.instance_interactive_conv_dropout(proposal_feat_iic)
+        proposal_feat = proposal_feat + proposal_feat_iic
         obj_feat = self.instance_interactive_conv_norm(proposal_feat)
 
         # FFN
@@ -220,10 +233,23 @@ class DIIHead(BBoxHead):
         cls_score = self.fc_cls(cls_feat).view(
             N, num_proposals, self.num_classes
             if self.loss_cls.use_sigmoid else self.num_classes + 1)
+
         # # TODO 添加 bboxes 位置感知
         # # 得到bbox的坐标  self.fc_reg --> FCN
         # bbox_delta = self.fc_reg(reg_feat).view(N, num_proposals, 4) + attn_bbox
+
+        # 原始 bbox 坐标
         bbox_delta = self.fc_reg(reg_feat).view(N, num_proposals, 4)
+        
+        # # 让 bboxes 在上一层结果上迭代
+        # if not stage:
+        #     bbox_delta = pos_bboxes + self.fc_reg(reg_feat).view(N, num_proposals, 4)
+        # else:
+        #     bbox_delta = pos_bboxes.detach() + self.fc_reg(reg_feat).view(N, num_proposals, 4)
+
+        # # TODO：阻断梯度
+        # proposal_feat = proposal_feat.detach() + proposal_feat_iic
+        # obj_feat = self.instance_interactive_conv_norm(proposal_feat)
 
         return cls_score, bbox_delta, obj_feat.view(
             N, num_proposals, self.in_channels), attn_feats

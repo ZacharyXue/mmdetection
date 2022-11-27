@@ -60,7 +60,12 @@ model = dict(
                     norm_cfg=dict(type='LN')),
                 loss_bbox=dict(type='L1Loss', loss_weight=5.0),
                 # loss_iou=dict(type='GIoULoss', loss_weight=2.0),
-                loss_iou=dict(type='CIoULoss', loss_weight=2.0),
+                loss_iou=dict(
+                    type='CIoULoss', 
+                    loss_weight=2.0, 
+                    beta_center=2,
+                    beta_aspect=0.5 + 2 * i/num_stages
+                ),
                 loss_cls=dict(
                     type='FocalLoss',
                     use_sigmoid=True,
@@ -71,7 +76,7 @@ model = dict(
                     type='DeltaXYWHBBoxCoder',
                     clip_border=False,
                     target_means=[0., 0., 0., 0.],
-                    target_stds=[0.5, 0.5, 1., 1.])) for _ in range(num_stages)
+                    target_stds=[0.5, 0.5, 1., 1.])) for i in range(num_stages)
         ]
     ),
     # training and testing settings
