@@ -73,7 +73,8 @@ def plot_curve(log_dicts, args):
                     if 'val' in log_dict[epoch]['mode']:
                         xs.append(epoch)
                 plt.xlabel('epoch')
-                plt.plot(xs, ys, label=legend[i * num_metrics + j], marker='o')
+                plt.ylabel('mAP')
+                plt.plot(xs, ys, label=legend[i * num_metrics + j])
             else:
                 xs = []
                 ys = []

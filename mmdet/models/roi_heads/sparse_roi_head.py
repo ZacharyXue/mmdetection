@@ -153,6 +153,8 @@ class SparseRoIHead(CascadeRoIHead):
             bbox_pred.view(-1, bbox_pred.size(-1)),
             [rois.new_zeros(object_feats.size(1)) for _ in range(num_imgs)],
             img_metas)
+        #   Returns: 
+        #       list[Tensor]: Refined bboxes of each image in a mini-batch.
         bbox_results = dict(
             cls_score=cls_score,
             decode_bbox_pred=torch.cat(proposal_list),
@@ -348,7 +350,10 @@ class SparseRoIHead(CascadeRoIHead):
         assert self.with_bbox, 'Bbox head must be implemented.'
         # Decode initial proposals
         num_imgs = len(img_metas)
+        # 应该是单纯的变为列表的形式，后面需要的形式是 list[Tensor]
+        # proposal_list.shape = (batch_size, num_proposals, 4)
         proposal_list = [proposal_boxes[i] for i in range(num_imgs)]
+        predicted_boxes = proposal_boxes.detach()
         ori_shapes = tuple(meta['ori_shape'] for meta in img_metas)
         scale_factors = tuple(meta['scale_factor'] for meta in img_metas)
 
@@ -370,6 +375,11 @@ class SparseRoIHead(CascadeRoIHead):
             object_feats = bbox_results['object_feats']
             cls_score = bbox_results['cls_score']
             proposal_list = bbox_results['detach_proposal_list']
+            #   list[Tensor]: Refined bboxes of each image in a mini-batch.
+            # proposal_list 每一项都是一个 tensor，tensor代表的是一个 img 中的
+            # 所有目标框
+            
+            predicted_boxes = [torch.cat([predicted_boxes[i], proposal_list[i]], dim=-1) for i in range(num_imgs)]
 
         if self.with_mask:
             rois = bbox2roi(proposal_list)
@@ -387,17 +397,37 @@ class SparseRoIHead(CascadeRoIHead):
         else:
             cls_score = cls_score.softmax(-1)[..., :-1]
 
+        # 对每一张 img 的 bbox、 score 和 label 进行单独处理
         for img_id in range(num_imgs):
+            # ! 获得阈值之上的预测结果
             cls_score_per_img = cls_score[img_id]
             scores_per_img, topk_indices = cls_score_per_img.flatten(
                 0, 1).topk(
                     self.test_cfg.max_per_img, sorted=False)
+            # torch.flatten(input, start_dim=0, end_dim=- 1) → Tensor
+            #   Flattens input by reshaping it into a one-dimensional tensor. 
+            #   If start_dim or end_dim are passed, only dimensions starting 
+            #   with start_dim and ending with end_dim are flattened.
+            # torch.topk(input, k, dim=None, largest=True, sorted=True, *, out=None)
+            #   A namedtuple of (values, indices) is returned with the values and indices 
+            #   of the largest k elements of each row of the input tensor in the given 
+            #   dimension dim. 
+            # scores_per_img.shape = topk_indices.shape = (num_proposals)
             labels_per_img = topk_indices % num_classes
-            bbox_pred_per_img = proposal_list[img_id][topk_indices //
-                                                      num_classes]
+            # ! 取出相应 bboxes
+            # bbox_pred_per_img = proposal_list[img_id][topk_indices //
+            #                                           num_classes]
+            bbox_pred_per_img = predicted_boxes[img_id][topk_indices //
+                                                        num_classes]
             if rescale:
                 scale_factor = img_metas[img_id]['scale_factor']
-                bbox_pred_per_img /= bbox_pred_per_img.new_tensor(scale_factor)
+                # img_metas[img_id]['scale_factor'].shape = (4,)
+                
+                # bbox_pred_per_img /= bbox_pred_per_img.new_tensor(scale_factor)
+                bbox_pred_per_img /= bbox_pred_per_img.new_tensor(scale_factor).repeat(7)
+                # new_tensor(): An new Tensor the same torch.dtype and torch.device as this tensor.
+                # 使用 repeat 的原因是因为 img_metas[img_id]['scale_factor'] 尺寸和我收集的各个阶段
+                # 目标框维度不一致
             det_bboxes.append(
                 torch.cat([bbox_pred_per_img, scores_per_img[:, None]], dim=1))
             det_labels.append(labels_per_img)
