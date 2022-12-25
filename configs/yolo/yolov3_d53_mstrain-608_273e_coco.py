@@ -1,7 +1,9 @@
 _base_ = '../_base_/default_runtime.py'
+# # 之后改动的时候全部使用最小模型的配置
 # model settings
 model = dict(
     type='YOLOV3',
+    # backbone 现阶段很少使用 Darknet，至少应该使用 CSPNet + PANet
     backbone=dict(
         type='Darknet',
         depth=53,
@@ -35,6 +37,7 @@ model = dict(
             use_sigmoid=True,
             loss_weight=1.0,
             reduction='sum'),
+        # YOLO v3 中没有使用 bbox loss
         loss_xy=dict(
             type='CrossEntropyLoss',
             use_sigmoid=True,
