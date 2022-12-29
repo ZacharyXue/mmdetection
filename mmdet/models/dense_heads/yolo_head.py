@@ -199,8 +199,9 @@ class YOLOV3Head(BaseDenseHead, BBoxTestMixin):
         pred_maps = []
         for i in range(self.num_levels):
             x = feats[i]
-            x = self.convs_bridge[i](x)
-            pred_map = self.convs_pred[i](x)
+            x = self.convs_bridge[i](x)  # convs_bridge 是从类FPN各个 block 出来之后进入的 module
+            pred_map = self.convs_pred[i](x)  # conv_pred 则是输入 convs_bridge 的输出，从而获得预测结果
+                                              # 也就是这一步获得 bboxes 坐标以及置信度相关
             pred_maps.append(pred_map)
 
         return tuple(pred_maps),
@@ -249,7 +250,14 @@ class YOLOV3Head(BaseDenseHead, BBoxTestMixin):
         for pred, stride in zip(pred_maps, self.featmap_strides):
             pred = pred.permute(0, 2, 3, 1).reshape(num_imgs, -1,
                                                     self.num_attrib)
-            pred[..., :2].sigmoid_()
+            pred[..., :2].sigmoid_()  # YOLO v4 中应该对这里进行了调整，防止 center_xy 无法回归到 grid 边缘
+                                      # 关于具体原因，是 yolo_bbox_coder 中的 encoder 部分推导 target 公式导致的：
+                                      # L53： 
+                                      #     x_center_target = ((x_center_gt - x_center) / stride + 0.5).clamp(self.eps, 1 - self.eps)
+                                      # 因此，最终的预测值 x_center_output = ( x_center_pred - 0.5 ) * stride + x_center
+                                      # x_center_pred 即为当前代码中的 pred[..., 0]，x_center 为当前 grid 中心点 x 坐标
+                                      # 因此，中心点坐标应该在以 当前 grid 中心点 为中心， stride 为长宽的范围内偏移，
+                                      # 但是由于 sigmoid 的特性，当前点是很难顾及 grid 边缘点的
             flatten_preds.append(pred)
             flatten_strides.append(
                 pred.new_tensor(stride).expand(pred.size(1)))
@@ -395,7 +403,7 @@ class YOLOV3Head(BaseDenseHead, BBoxTestMixin):
         return loss_cls, loss_conf, loss_xy, loss_wh
 
     def get_targets(self, anchor_list, responsible_flag_list, gt_bboxes_list,
-                    gt_labels_list):
+                    gt_labels_list):  # get_targets() 是对 gt 进行转换得到一个让网络能够预测的值
         """Compute target maps for anchors in multiple images.
 
         Args:
@@ -461,6 +469,7 @@ class YOLOV3Head(BaseDenseHead, BBoxTestMixin):
         anchor_strides = torch.cat(anchor_strides)
         assert len(anchor_strides) == len(concat_anchors) == \
                len(concat_responsible_flags)
+        # 分配 gt
         assign_result = self.assigner.assign(concat_anchors,
                                              concat_responsible_flags,
                                              gt_bboxes)
@@ -472,7 +481,7 @@ class YOLOV3Head(BaseDenseHead, BBoxTestMixin):
 
         target_map[sampling_result.pos_inds, :4] = self.bbox_coder.encode(
             sampling_result.pos_bboxes, sampling_result.pos_gt_bboxes,
-            anchor_strides[sampling_result.pos_inds])
+            anchor_strides[sampling_result.pos_inds])  # 这里获得的是相对anchor的调整值大小
 
         target_map[sampling_result.pos_inds, 4] = 1
 

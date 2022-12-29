@@ -9,7 +9,7 @@ from mmcv.runner import BaseModule
 from ..builder import NECKS
 
 
-class DetectionBlock(BaseModule):
+class DetectionBlock(BaseModule):  # DetectionBlock 是几组 BN+ACT+Conv
     """Detection block in YOLO neck.
 
     Let out_channels = n, the DetectionBlock contains:
@@ -125,8 +125,18 @@ class YOLOV3Neck(BaseModule):
         out = self.detect1(feats[-1])
         outs.append(out)
 
+        # 对于每一层：
+        #   1. conv 卷积层
+        #   2. 插值到上一层输出尺度
+        #   3. 和上一层 concat
+        #   4. conv 卷积，作为输出的一部分
+        # 基本逻辑正如注释中所说，和 FPN 相类似
         for i, x in enumerate(reversed(feats[:-1])):
+            # reversed 函数返回一个反转的迭代器。
             conv = getattr(self, f'conv{i+1}')
+            # getattr 在这里用的特别好，获取 self 该类中的相应属性
+            #   又因为 之前已经给 conv 按规则进行了初始化，这里只需要 f` `
+            #   就可以读取相应的层
             tmp = conv(out)
 
             # Cat with low-lvl feats
